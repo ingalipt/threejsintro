@@ -14,36 +14,37 @@
 </head>
 <body>
 
-<script id="vertexShader_cube" type="x-shader/x-vertex">
+<script id="vs" type="x-shader/x-vertex">
 
-    uniform vec2 uvScale;
     varying vec2 vUv;
-    uniform float time;
-    void main()
-    {
 
-        vUv = uvScale * uv;
-        vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
-        gl_Position = projectionMatrix * mvPosition+sin(time);
+    void main() {
+
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 
     }
 
 </script>
 
-<script id="fragmentShader_cube" type="x-shader/x-fragment">
+<script id="fs" type="x-shader/x-fragment">
+
+    uniform sampler2D map;
+
+    uniform vec3 fogColor;
+    uniform float fogNear;
+    uniform float fogFar;
 
     varying vec2 vUv;
 
-    uniform float time;
+    void main() {
 
-    void main()	{
+        float depth = gl_FragCoord.z / gl_FragCoord.w;
+        float fogFactor = smoothstep( fogNear, fogFar, depth );
 
-        vec2 p = - 1.0 + 2.0 * vUv;
-        float a = time * 40.0;
-        float d, e, f, g = 1.0 / 40.0 ,h ,i ,r ,q;
-
-
-        gl_FragColor = vec4( vec3( vUv.x*0.5+0.5*sin(time),vUv.x,vUv.y*cos(time)), 1.0 );
+        gl_FragColor = texture2D( map, vUv );
+        gl_FragColor.w *= pow( gl_FragCoord.z, 20.0 );
+        gl_FragColor = mix( gl_FragColor, vec4( fogColor, gl_FragColor.w ), fogFactor );
 
     }
 
@@ -63,6 +64,7 @@
     init();
     animate();
     function init(){
+        // RENDERER CAMERA SCENE
         renderer = new THREE.WebGLRenderer( { antialias: true } );
         renderer.setPixelRatio( window.devicePixelRatio );
         renderer.setSize( window.innerWidth, window.innerHeight );
@@ -78,7 +80,7 @@ scene.add(alight);
         light.position.set(100,100,100);
         scene.add( light );
         var waterGeometry = new THREE.PlaneBufferGeometry( 10000, 10000 );
-
+//  WATER
          water = new Water(
             waterGeometry,
             {
@@ -101,6 +103,7 @@ scene.add(alight);
         water.rotation.x = - Math.PI / 2;
 
         scene.add( water );
+        //SKY
         var sky = new Sky();
 
         var uniforms = sky.material.uniforms;
@@ -113,7 +116,7 @@ scene.add(alight);
 
         parameters = {
             distance: 400,
-            inclination: 0.499,
+            inclination: 0.489,
             azimuth: 0.205
         };
 
@@ -151,7 +154,7 @@ scene.add(alight);
             } );
 
             object.position.set(20,10,10);
-            object.rotation.set(Math.PI/2,0,0);
+            object.rotation.set(0,-Math.PI/2,0);
             object.scale.set(10,10,10);
             scene.add( object );
 
@@ -164,7 +167,7 @@ scene.add(alight);
         function onError() {}
         var loader = new OBJLoader( manager );
 
-        loader.load( './obj/beton.obj', function ( obj ) {
+        loader.load( './obj/nikolay.obj', function ( obj ) {
 
             object = obj;
 
@@ -183,7 +186,7 @@ scene.add(alight);
     function render() {
         var time = performance.now() * 0.001;
         water.material.uniforms[ 'time' ].value += 1.0 / 60.0;
-        object.rotation.z+=Math.sin(time)/80;
+        object.rotation.y+=Math.sin(time)/80;
         renderer.render(scene,camera);
 
     }

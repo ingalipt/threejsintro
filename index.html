@@ -50,11 +50,16 @@
 </script>
 <script type = "module">
     import * as THREE from "./modules/three.module.js";
+    import { Water } from './jsm/Water.js';
+    import { Sky } from './jsm/Sky.js';
+    import { OBJLoader } from './jsm/OBJLoader.js';
 
     var renderer, scene, camera;
     var clock;
     var uniforms;
-    var mesh, mesh1;
+    var mesh, mesh1,light,water;
+    var parameters;
+    var object;
     init();
     animate();
     function init(){
@@ -62,42 +67,110 @@
         renderer.setPixelRatio( window.devicePixelRatio );
         renderer.setSize( window.innerWidth, window.innerHeight );
         document.body.appendChild( renderer.domElement );
-        clock = new THREE.Clock();
+        //clock = new THREE.Clock();
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(45,window.innerWidth / window.innerHeight,0.01,5000);
-        uniforms = {
+camera.position.set(10,10,100);
+camera.lookAt(0,0,0);
+var alight = new THREE.AmbientLight(0xffee55,0.1);
+scene.add(alight);
+        light = new THREE.DirectionalLight( 0xffffff, 1 );
+        light.position.set(100,100,100);
+        scene.add( light );
+        var waterGeometry = new THREE.PlaneBufferGeometry( 10000, 10000 );
 
-            "fogDensity": { value: 0.45 },
-            "fogColor": { value: new THREE.Vector3( 0, 0, 0 ) },
-            "time": { value: 1.0 },
-            "uvScale": { value: new THREE.Vector2( 3.0, 1.0 ) }
+         water = new Water(
+            waterGeometry,
+            {
+                textureWidth: 512,
+                textureHeight: 512,
+                waterNormals: new THREE.TextureLoader().load( 'textures/waternormals.jpg', function ( texture ) {
 
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
 
+                } ),
+                alpha: 1.0,
+                sunDirection: light.position.clone().normalize(),
+                sunColor: 0xffffff,
+                waterColor: 0x001e0f,
+                distortionScale: 3.7,
+                fog: scene.fog !== undefined
+            }
+        );
+
+        water.rotation.x = - Math.PI / 2;
+
+        scene.add( water );
+        var sky = new Sky();
+
+        var uniforms = sky.material.uniforms;
+
+        uniforms[ 'turbidity' ].value = 10;
+        uniforms[ 'rayleigh' ].value = 2;
+        uniforms[ 'luminance' ].value = 1;
+        uniforms[ 'mieCoefficient' ].value = 0.005;
+        uniforms[ 'mieDirectionalG' ].value = 0.8;
+
+        parameters = {
+            distance: 400,
+            inclination: 0.499,
+            azimuth: 0.205
         };
-//cube
 
-        var material = new THREE.ShaderMaterial( {
+        var cubeCamera = new THREE.CubeCamera( 0.1, 1, 512 );
+        cubeCamera.renderTarget.texture.generateMipmaps = true;
+        cubeCamera.renderTarget.texture.minFilter = THREE.LinearMipmapLinearFilter;
 
-            uniforms: uniforms,
-            vertexShader: document.getElementById( 'vertexShader_cube' ).textContent,
-            fragmentShader: document.getElementById( 'fragmentShader_cube' ).textContent
+        scene.background = cubeCamera.renderTarget;
+        function updateSun() {
 
-        } );
-        var geometry = new THREE.PlaneBufferGeometry(2,2);
-        mesh = new THREE.Mesh(new THREE.OctahedronBufferGeometry(20,3),material);
-        scene.add(mesh);
-        camera.position.set(10,10,100);
-        camera.lookAt(0,0,0);
+            var theta = Math.PI * ( parameters.inclination - 0.5 );
+            var phi = 2 * Math.PI * ( parameters.azimuth - 0.5 );
 
-        var material1 = new THREE.MeshPhongMaterial({color:0x00ff00});
-        var geometry1 = new THREE.BoxBufferGeometry(10,10,10,2,2,2);
-        mesh1 = new THREE.Mesh(geometry1,material1);
-        mesh1.position.x+=30;
-        scene.add(mesh1);
+            light.position.x = parameters.distance * Math.cos( phi );
+            light.position.y = parameters.distance * Math.sin( phi ) * Math.sin( theta );
+            light.position.z = parameters.distance * Math.sin( phi ) * Math.cos( theta );
 
-        var light = new THREE.AmbientLight(0xffffff,1.0);
-        scene.add(light);
+            sky.material.uniforms[ 'sunPosition' ].value = light.position.copy( light.position );
+            water.material.uniforms[ 'sunDirection' ].value.copy( light.position ).normalize();
+
+            cubeCamera.update( renderer, sky );
+
+        }
+
+        updateSun();
+
+
+
+        function loadModel() {
+
+            object.traverse( function ( child ) {
+
+                if ( child.isMesh ) child.material=new THREE.MeshPhongMaterial({color:0x00ff00});
+
+            } );
+
+            object.position.set(20,10,10);
+            object.rotation.set(Math.PI/2,0,0);
+            object.scale.set(10,10,10);
+            scene.add( object );
+
+        }
+
+        var manager = new THREE.LoadingManager( loadModel );
+
+
+        function onProgress( xhr ) {}
+        function onError() {}
+        var loader = new OBJLoader( manager );
+
+        loader.load( './obj/beton.obj', function ( obj ) {
+
+            object = obj;
+
+        }, onProgress, onError );
     }
+
 
     function animate() {
 
@@ -108,11 +181,9 @@
     }
 
     function render() {
-
-        var delta = 5 * clock.getDelta();
-        uniforms[ "time" ].value += 0.2 * delta;
-mesh1.rotation.x+=Math.PI/500;
-        mesh.rotation.x+=Math.PI/500;
+        var time = performance.now() * 0.001;
+        water.material.uniforms[ 'time' ].value += 1.0 / 60.0;
+        object.rotation.z+=Math.sin(time)/80;
         renderer.render(scene,camera);
 
     }
